@@ -320,12 +320,12 @@
 
     var getTextNode = function(stageBox , number)  {
       var textNode = new Konva.Text({
-          fontSize: 14,
+          fontSize: 16,
           fontFamily: 'Ariel',
           text: 'Player'+ number,
           id: number.toString(),
           fontStyle: 'bold',
-          fill: 'white',
+          fill: 'purple',
           padding: 10,
           x: -40,
           y: 5,
@@ -336,11 +336,11 @@
 
    var getPosNode = function(stageBox , pos, id)  {
       var textNode = new Konva.Text({
-          fontSize: 12,
+          fontSize: 14,
           fontFamily: 'Calibri',
           text: pos,
           id: id,
-          fill: 'white',
+          fill: 'purple',
           padding: 10,
           x: 8,
           y: -15,
@@ -356,7 +356,7 @@
           fontStyle: 'bold',
           text: bname,
           id: 'bowlername',
-          fill: 'black',
+          fill: 'brown',
           padding: 10,
           x: width/2-100,
           y: -10,
@@ -375,7 +375,7 @@
           fontStyle: 'bold',
           text: bname,
           id: 'battername',
-          fill: 'black',
+          fill: 'red',
           padding: 0,
           x: 0,
           y: height-25,
