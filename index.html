@@ -84,6 +84,22 @@
       <input class="form-check-input" type="checkbox" value="" id="catchcoverage" onchange="togglecatchcoverage();">
       <label class="form-check-label" for="catchcoverage">Show Catch Coverage</label>
       </div>
+
+      <hr class="divider">
+      <h6>Powerplay</h6>
+      <div class="form-check">
+      <input class="form-check-input" type="checkbox" value="" id="powerplay1" onchange="handlePowerplayToggle('powerplay1');">
+      <label class="form-check-label" for="powerplay1">Powerplay 1 (max 2 outside 30-yard circle)</label>
+      </div>
+      <div class="form-check">
+      <input class="form-check-input" type="checkbox" value="" id="powerplay2" onchange="handlePowerplayToggle('powerplay2');">
+      <label class="form-check-label" for="powerplay2">Powerplay 2 (max 4 outside 30-yard circle)</label>
+      </div>
+      <div class="form-check">
+      <input class="form-check-input" type="checkbox" value="" id="powerplay3" onchange="handlePowerplayToggle('powerplay3');">
+      <label class="form-check-label" for="powerplay3">Powerplay 3 (max 5 outside 30-yard circle)</label>
+      </div>
+      <small id="outsideCounter" class="form-text text-muted">Outside 30-yard circle: 0 / no limit</small>
   
       <hr class="divider">
       <div id='teamControls'>
@@ -561,6 +577,7 @@
       layer.draw();
       hidepname();
       hideposname();
+      updateOutsideCounter();
     }
 
     function handleRosterToggle(changedCheckbox){
@@ -697,6 +714,7 @@
       allposcoord = tmp
       layerground.draw()
       layer.draw()
+      updateOutsideCounter();
     }
 
 
@@ -797,6 +815,7 @@
                     drawcatchcover_init(group);
                   });
                   applyTeamSelection();
+                  updateOutsideCounter();
                   layer.draw()
               } catch (error) {
                   showAlert("Invalid JSON file. Please check the file and try again.");
@@ -826,6 +845,111 @@
     }
     var groundedcovers = [null, null, null, null, null, null, null, null, null, null, null];
     var catchcovers = [null, null, null, null, null, null, null, null, null, null, null];
+    var activePowerplayId = null;
+
+    var powerplayLimits = {
+      powerplay1: { label: 'Powerplay 1', maxOutside: 2 },
+      powerplay2: { label: 'Powerplay 2', maxOutside: 4 },
+      powerplay3: { label: 'Powerplay 3', maxOutside: 5 }
+    };
+
+    function isFielderGroup(group){
+      var tbox = group.getChildren()[2];
+      return tbox && tbox.id && tbox.id().substring(0, 3) === 'pos';
+    }
+
+    function isOutsideInnerCircle(x, y){
+      var centerX = width / 2;
+      var centerY = height / 2;
+      var innerRx = width * 0.47 / 2;
+      var innerRy = height * 0.55 / 2;
+      var normalized = ((x - centerX) * (x - centerX)) / (innerRx * innerRx) + ((y - centerY) * (y - centerY)) / (innerRy * innerRy);
+      return normalized > 1;
+    }
+
+    function countOutsideFielders(candidateGroup, candidatePos){
+      var outsideCount = 0;
+      var groups = layer.find(node => node instanceof Konva.Group);
+      groups.forEach(function(group){
+        if (!isFielderGroup(group) || !group.isVisible()){
+          return;
+        }
+
+        var nameText = group.getChildren()[1];
+        if (!(nameText instanceof Konva.Text) || !nameText.text()){
+          return;
+        }
+
+        var x = group.x();
+        var y = group.y();
+        if (candidateGroup === group && candidatePos){
+          x = candidatePos.x;
+          y = candidatePos.y;
+        }
+
+        if (isOutsideInnerCircle(x, y)){
+          outsideCount += 1;
+        }
+      });
+      return outsideCount;
+    }
+
+    function getActivePowerplay(){
+      if (!activePowerplayId){
+        return null;
+      }
+      return powerplayLimits[activePowerplayId] || null;
+    }
+
+    function updateOutsideCounter(candidateGroup, candidatePos){
+      var outsideCount = countOutsideFielders(candidateGroup || null, candidatePos || null);
+      var activePowerplay = getActivePowerplay();
+      var limitText = activePowerplay ? activePowerplay.maxOutside : 'no limit';
+      document.getElementById('outsideCounter').textContent = 'Outside 30-yard circle: ' + outsideCount + ' / ' + limitText;
+    }
+
+    function validatePowerplayForPlacement(candidateGroup, candidatePos){
+      var activePowerplay = getActivePowerplay();
+      if (!activePowerplay){
+        return { valid: true, outsideCount: 0, maxOutside: null, label: '' };
+      }
+
+      var outsideCount = countOutsideFielders(candidateGroup, candidatePos);
+      var valid = outsideCount <= activePowerplay.maxOutside;
+      return {
+        valid: valid,
+        outsideCount: outsideCount,
+        maxOutside: activePowerplay.maxOutside,
+        label: activePowerplay.label
+      };
+    }
+
+    function handlePowerplayToggle(changedId){
+      var changedCheckbox = document.getElementById(changedId);
+      var previousPowerplayId = activePowerplayId;
+
+      ['powerplay1', 'powerplay2', 'powerplay3'].forEach(function(id){
+        if (id !== changedId){
+          document.getElementById(id).checked = false;
+        }
+      });
+
+      activePowerplayId = changedCheckbox.checked ? changedId : null;
+      var validation = validatePowerplayForPlacement(null, null);
+
+      if (!validation.valid){
+        activePowerplayId = previousPowerplayId;
+        ['powerplay1', 'powerplay2', 'powerplay3'].forEach(function(id){
+          document.getElementById(id).checked = id === previousPowerplayId;
+        });
+        showAlert(validation.label + ' allows only ' + validation.maxOutside + ' fielders outside the 30-yard circle. Current: ' + validation.outsideCount + '.');
+      }
+      else if ($('#alertContainer .alert').length){
+        document.getElementById('alertContainer').innerHTML = '';
+      }
+
+      updateOutsideCounter();
+    }
 
     var yellowGroup = getPlayerGroup(positions[0][0]*width, positions[0][1]*height);
     var textNode1 = getTextNode(stage.getContainer().getBoundingClientRect(), 1);
@@ -857,11 +981,34 @@
     stage.add(layer);
     renderTeamControls();
     applyTeamSelection();
+    updateOutsideCounter();
+
+    stage.on('dragmove', function (e) {
+      var tbox = e.target.getChildren()[2];
+      if (tbox && tbox.id && tbox.id().substring(0, 3) === 'pos'){
+        updateOutsideCounter(e.target, {x: e.target.x(), y: e.target.y()});
+      }
+    });
 
     stage.on('dragend', function (e) {
       var posx = e.target.x()
       var posy = e.target.y();
       var tbox = e.target.getChildren()[2];
+      var previousX = e.target.getAttr('previousX');
+      var previousY = e.target.getAttr('previousY');
+
+      if (tbox.id().substring(0, 3) === 'pos'){
+        var validation = validatePowerplayForPlacement(e.target, {x: posx, y: posy});
+        if (!validation.valid){
+          if (typeof previousX === 'number' && typeof previousY === 'number'){
+            e.target.position({x: previousX, y: previousY});
+            posx = previousX;
+            posy = previousY;
+          }
+          showAlert(validation.label + ' allows only ' + validation.maxOutside + ' fielders outside the 30-yard circle.');
+        }
+      }
+
       if (tbox.id().substring(0, 3)=='pos'){
         var abspos = [posx/width, posy/height]
         var newtext = allpos[nearest_neighbor(abspos, allposcoord)]
@@ -870,6 +1017,15 @@
         drawgroundedcover(e);
         drawcatchcover(e);
       }
+
+      e.target.setAttr('previousX', posx);
+      e.target.setAttr('previousY', posy);
+      updateOutsideCounter();
+    });
+
+    stage.on('dragstart', function (e) {
+      e.target.setAttr('previousX', e.target.x());
+      e.target.setAttr('previousY', e.target.y());
     });
 
     function hidepname(){
